@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Escher Rails — 視点投影接続型・重力線路ゲーム</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="stage"></canvas>
+      <div id="hud">
+        <div id="hud-title">ESCHER&nbsp;RAILS</div>
+        <div id="hud-stage">STAGE <span id="stage-num">1</span></div>
+        <div id="hud-status"></div>
+        <div id="hud-help">
+          <div>← → : 視点回転（yaw）</div>
+          <div>↑ ↓ : 視点傾き（pitch）</div>
+          <div>Space : ボール開始 / リセット</div>
+          <div>N : 次のステージ</div>
+          <div>R : 現ステージをやり直し</div>
+        </div>
+        <div id="hud-debug"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

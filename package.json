@@ -1,0 +1,36 @@
+{
+  "name": "escher",
+  "version": "0.1.0",
+  "description": "視点投影接続型・重力線路ゲーム — Perspective-projection connected gravity rail game",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "game",
+    "escher",
+    "puzzle",
+    "threejs",
+    "perspective"
+  ],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@11.0.9",
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/three": "^0.184.1",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.13",
+    "vitest": "^4.1.6"
+  },
+  "dependencies": {
+    "three": "^0.184.0"
+  }
+}
