@@ -12,8 +12,20 @@
       <canvas id="navcube" width="160" height="160"></canvas>
       <div id="hud">
         <div id="hud-title">ESCHER&nbsp;RAILS</div>
-        <div id="hud-stage">STAGE <span id="stage-num">1</span></div>
+        <div id="hud-stage" hidden>STAGE <span id="stage-num">1</span></div>
         <div id="hud-status"></div>
+        <div id="hud-collect" hidden>
+          <span class="collect-label">TIME</span>
+          <span id="time-num">60</span>
+          <span class="collect-label">SCORE</span>
+          <span id="score-num">0</span>
+        </div>
+        <div id="hud-help">
+          <div>ドラッグ : 視点回転</div>
+          <div>Tab : モード切替</div>
+          <div>← → : ステージ移動</div>
+          <div>Space / R : 再開</div>
+        </div>
         <div id="hud-debug"></div>
       </div>
     </div>

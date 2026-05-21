@@ -59,6 +59,10 @@ body,
   color: var(--ink);
 }
 
+#hud-stage[hidden] {
+  display: none;
+}
+
 #hud-status {
   position: absolute;
   top: 28px;
@@ -74,15 +78,59 @@ body,
   min-height: 1.4em;
 }
 
+#hud-help {
+  position: absolute;
+  bottom: 18px;
+  right: 22px;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1.7;
+  text-align: right;
+  letter-spacing: 0.04em;
+}
+
 #hud-debug {
   position: absolute;
   bottom: 12px;
-  right: 16px;
+  left: 16px;
   color: var(--dim);
   font-size: 10px;
-  text-align: right;
+  text-align: left;
   white-space: pre;
   line-height: 1.4;
+}
+
+#hud-collect {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  font-size: 32px;
+  font-weight: bold;
+  color: var(--ink);
+  letter-spacing: 0.08em;
+}
+
+/* hidden 属性で display:flex を上書き */
+#hud-collect[hidden] {
+  display: none;
+}
+
+#hud-collect .collect-label {
+  font-size: 16px;
+  letter-spacing: 0.2em;
+  color: var(--dim);
+}
+
+#hud-collect #time-num,
+#hud-collect #score-num {
+  min-width: 2ch;
+  text-align: right;
+  color: var(--accent);
 }
 
 #navcube {

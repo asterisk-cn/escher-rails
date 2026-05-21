@@ -1,20 +1,26 @@
-// アプリケーションエントリ。
+// アプリケーションエントリ。モード切替と入力配線のみ。
+// ゲームロジックは modes/ 配下に分割されている。
 //
-// 視点 (yaw, pitch) はマウスドラッグで自由に回転。回転制限なし。
-// 物理 (stepBall) は毎フレーム進む。レール上の任意点で他レールと
-// screen 交差したら自動的に乗り換える（中間視点リンク）。
+// 操作:
+//   Tab          モード切替（PUZZLE ⇄ COLLECT）
+//   ← →         同モード内のステージ／マップを前後
+//   Space / R    現ステージを再開
+//   ドラッグ     視点回転（制限なし）
 
-import { levels } from "./game/levels.js";
-import { makeInitialBall, stepBall, type BallState } from "./game/physics.js";
 import { projectPoint, type View } from "./game/projection.js";
-import { buildWorld, type World } from "./game/world.js";
-import { applyView, createScene, placeBall, populateWorld } from "./render/scene.js";
+import { createCollectMode, type CollectMode } from "./modes/collectMode.js";
+import { createPuzzleMode, type PuzzleMode } from "./modes/puzzleMode.js";
+import { applyView, createScene } from "./render/scene.js";
 import { createNavCube } from "./render/navCube.js";
 
 const canvas = document.getElementById("stage") as HTMLCanvasElement;
 const navCanvas = document.getElementById("navcube") as HTMLCanvasElement;
+const stageEl = document.getElementById("hud-stage") as HTMLDivElement;
 const stageNumEl = document.getElementById("stage-num")!;
 const statusEl = document.getElementById("hud-status")!;
+const collectEl = document.getElementById("hud-collect") as HTMLDivElement;
+const timeNumEl = document.getElementById("time-num")!;
+const scoreNumEl = document.getElementById("score-num")!;
 const debugEl = document.getElementById("hud-debug")!;
 
 const refs = createScene(canvas);
@@ -23,54 +29,64 @@ window.addEventListener("resize", refs.resize);
 
 const navCube = createNavCube(navCanvas);
 
-// --- ゲーム状態 ---
-type GameState = {
-  levelIndex: number;
-  world: World;
-  view: View;
-  ball: BallState;
-  cleared: boolean; // ゴール到達フラグ（達成後もボールは止めない）
-};
+// --- モード管理 ---
+type ActiveMode = PuzzleMode | CollectMode;
+let mode: ActiveMode = createCollectMode(refs); // 起動時は Collect モードがメイン
+let view: View = { yaw: 0.4, pitch: 0.25 };
 
-const loadLevel = (idx: number): GameState => {
-  const lv = levels[idx]!;
-  const world = buildWorld(lv.spec);
-  populateWorld(refs, world);
-  const ball = makeInitialBall(world);
-  placeBall(refs, world, ball);
-  stageNumEl.textContent = `${idx + 1} / ${levels.length}`;
-  setStatus(""); // 中央のステージ情報は出さない。CLEAR! のみ後でここに表示。
-  return {
-    levelIndex: idx,
-    world,
-    view: { yaw: 0.4, pitch: 0.25 }, // 少し斜めの初期視点で 3D 感を出す
-    ball,
-    cleared: false,
-  };
+const setMode = (kind: "puzzle" | "collect") => {
+  if (mode.type === kind) return;
+  mode = kind === "puzzle" ? createPuzzleMode(refs) : createCollectMode(refs);
+  view = { yaw: 0.4, pitch: 0.25 };
+  setStatus("");
+  syncModeHUD();
 };
 
 const setStatus = (s: string) => {
   statusEl.textContent = s;
 };
 
-let state: GameState = loadLevel(0);
+const syncModeHUD = () => {
+  if (mode.type === "puzzle") {
+    const i = mode.info();
+    stageEl.hidden = false;
+    stageNumEl.textContent = `${i.stageIndex + 1} / ${i.total}`;
+    collectEl.hidden = true;
+  } else {
+    const i = mode.info();
+    stageEl.hidden = true;
+    collectEl.hidden = false;
+    timeNumEl.textContent = i.timeLeft.toFixed(1);
+    scoreNumEl.textContent = String(i.score);
+  }
+};
+
+syncModeHUD();
 
 // --- 入力 ---
-// 矢印キーで前後ステージへ。Space/R で現ステージ再開。
 window.addEventListener("keydown", (e) => {
-  if (e.key === "ArrowRight") {
+  if (e.key === "Tab") {
     e.preventDefault();
-    state = loadLevel((state.levelIndex + 1) % levels.length);
+    setMode(mode.type === "puzzle" ? "collect" : "puzzle");
+  } else if (e.key === "ArrowRight") {
+    e.preventDefault();
+    mode.next();
+    setStatus("");
+    syncModeHUD();
   } else if (e.key === "ArrowLeft") {
     e.preventDefault();
-    state = loadLevel((state.levelIndex - 1 + levels.length) % levels.length);
+    mode.prev();
+    setStatus("");
+    syncModeHUD();
   } else if (e.key === " " || e.key === "Spacebar" || e.key === "r" || e.key === "R") {
     e.preventDefault();
-    state = loadLevel(state.levelIndex);
+    mode.restart();
+    setStatus("");
+    syncModeHUD();
   }
 });
 
-const MOUSE_YAW_SENS = 0.006; // ピクセルあたり rad
+const MOUSE_YAW_SENS = 0.006;
 const MOUSE_PITCH_SENS = 0.006;
 
 let dragging = false;
@@ -97,7 +113,7 @@ const endDrag = () => {
     try {
       canvas.releasePointerCapture(pointerId);
     } catch {
-      // 既に解放済みなど
+      // 既に解放済み
     }
     pointerId = null;
   }
@@ -110,30 +126,24 @@ canvas.addEventListener("pointermove", (e) => {
   const dy = e.clientY - lastY;
   lastX = e.clientX;
   lastY = e.clientY;
-  // 回転制限なし。yaw/pitch をそのまま蓄積する（CAD 風）。
-  state.view = {
-    yaw: state.view.yaw + dx * MOUSE_YAW_SENS,
-    pitch: state.view.pitch - dy * MOUSE_PITCH_SENS,
+  view = {
+    yaw: view.yaw + dx * MOUSE_YAW_SENS,
+    pitch: view.pitch - dy * MOUSE_PITCH_SENS,
   };
 });
 
 canvas.addEventListener("pointerup", endDrag);
 canvas.addEventListener("pointercancel", endDrag);
 canvas.addEventListener("pointerleave", endDrag);
-
-// 右クリックメニュー無効化（ドラッグ操作の邪魔になりうるため）
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
-// ナビゲーションキューブは向き表示のみ（クリックスナップは無効）。
+// ナビキューブは向き表示のみ
 navCanvas.style.pointerEvents = "none";
 
 const updateDebug = () => {
-  const yawDeg = ((state.view.yaw * 180) / Math.PI).toFixed(1);
-  const pitchDeg = ((state.view.pitch * 180) / Math.PI).toFixed(1);
-  debugEl.textContent =
-    `yaw ${yawDeg}°  pitch ${pitchDeg}°\n` +
-    `rail ${state.ball.railId}  t ${state.ball.t.toFixed(2)}\n` +
-    `speed ${state.ball.speed.toFixed(2)}  cooldown ${state.ball.cooldown.toFixed(2)}`;
+  const yawDeg = ((view.yaw * 180) / Math.PI).toFixed(1);
+  const pitchDeg = ((view.pitch * 180) / Math.PI).toFixed(1);
+  debugEl.textContent = `mode ${mode.type}\nyaw ${yawDeg}°  pitch ${pitchDeg}°`;
 };
 
 // --- メインループ ---
@@ -143,20 +153,24 @@ const tick = () => {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
-  // ボールは常時更新する（ゴール後も止めない）。
-  const r = stepBall(state.world, state.ball, state.view, dt);
-  state.ball = r.ball;
-  for (const ev of r.events) {
-    if (ev.kind === "goal" && !state.cleared) {
-      state.cleared = true;
-      setStatus("CLEAR!");
+  if (mode.type === "puzzle") {
+    const r = mode.step(view, dt);
+    if (r.justCleared) setStatus("CLEAR!");
+  } else {
+    const r = mode.step(view, dt);
+    const i = mode.info();
+    timeNumEl.textContent = i.timeLeft.toFixed(1);
+    scoreNumEl.textContent = String(i.score);
+    if (r.justTimeUp) {
+      setStatus(`TIME UP — SCORE ${i.score}`);
+      // 中央の TIME/SCORE と TIME UP メッセージが重なるので隠す
+      collectEl.hidden = true;
     }
   }
 
-  applyView(refs, state.view);
-  placeBall(refs, state.world, state.ball);
+  applyView(refs, view);
   refs.renderer.render(refs.scene, refs.camera);
-  navCube.render(state.view);
+  navCube.render(view);
   updateDebug();
 
   requestAnimationFrame(tick);
@@ -165,6 +179,7 @@ const tick = () => {
 requestAnimationFrame(tick);
 
 (globalThis as unknown as { __debug: unknown }).__debug = {
-  state: () => state,
+  mode: () => mode,
+  view: () => view,
   projectPoint,
 };

@@ -7,6 +7,7 @@
 // 実画面でもピクセル上で重なって見える。
 
 import * as THREE from "three";
+import type { Light } from "../game/collect.js";
 import { basisOf, type View } from "../game/projection.js";
 import type { World } from "../game/world.js";
 import { ballPosition, type BallState } from "../game/physics.js";
@@ -32,6 +33,7 @@ export type SceneRefs = Readonly<{
   worldGroup: THREE.Group;
   ballMesh: THREE.Mesh;
   goalMesh: THREE.Mesh;
+  lightGroup: THREE.Group; // collect モードの光の容れ物
   resize: () => void;
 }>;
 
@@ -59,6 +61,8 @@ export const createScene = (canvas: HTMLCanvasElement): SceneRefs => {
 
   const worldGroup = new THREE.Group();
   scene.add(worldGroup);
+  const lightGroup = new THREE.Group();
+  scene.add(lightGroup);
 
   // ボール
   const ballGeom = new THREE.SphereGeometry(0.45, 24, 18);
@@ -90,7 +94,39 @@ export const createScene = (canvas: HTMLCanvasElement): SceneRefs => {
     camera.updateProjectionMatrix();
   };
 
-  return { scene, camera, renderer, worldGroup, ballMesh, goalMesh, resize };
+  return { scene, camera, renderer, worldGroup, ballMesh, goalMesh, lightGroup, resize };
+};
+
+// 共有ジオメトリ / マテリアル（光は数が決まっているのでプールで使い回す）。
+const LIGHT_GEOM = new THREE.SphereGeometry(0.32, 16, 12);
+const LIGHT_MAT = new THREE.MeshStandardMaterial({
+  color: 0xfff5a0,
+  emissive: 0xf6c177,
+  emissiveIntensity: 1.4,
+  roughness: 0.3,
+});
+
+export const updateLights = (refs: SceneRefs, lights: ReadonlyArray<Light>): void => {
+  // 必要数まで mesh を増やす（pool）
+  while (refs.lightGroup.children.length < lights.length) {
+    const mesh = new THREE.Mesh(LIGHT_GEOM, LIGHT_MAT);
+    refs.lightGroup.add(mesh);
+  }
+  // 位置を更新、余分は非表示
+  for (let i = 0; i < refs.lightGroup.children.length; i++) {
+    const mesh = refs.lightGroup.children[i] as THREE.Mesh;
+    const light = lights[i];
+    if (light) {
+      mesh.visible = true;
+      mesh.position.set(light.position.x, light.position.y, light.position.z);
+    } else {
+      mesh.visible = false;
+    }
+  }
+};
+
+export const clearLights = (refs: SceneRefs): void => {
+  for (const c of refs.lightGroup.children) (c as THREE.Mesh).visible = false;
 };
 
 // World をシーンに反映（再構築）。

@@ -1,20 +1,20 @@
-// ステージ定義。
+// パズルモードのステージ定義。
 //
 // 設計指針:
-// - 単位スケールを 4 程度の整数座標で組む（視覚的にわかりやすく）。
-// - レールはわずかに傾けて重力で転がるようにする（完全水平だと止まる）。
+// - 単位スケールを 4 程度の整数座標で組む。
+// - レールはわずかに傾けて重力で転がるようにする。
 // - 各ステージで「視点を回さないと届かない」状況を 1 つは仕込む。
 
 import { v3 } from "./vec.js";
 import type { WorldSpec } from "./world.js";
 
-export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string }> = [
-  // -----------------------------------------------------------------------
-  // STAGE 1: 視点接続を初めて体験する。
-  // 短いスロープ A→B の終端 B が、別の独立スロープ C→D の始端 C と
-  // Z 方向にずれている。視点を真正面（yaw=0）に合わせると B と C が重なり、
-  // ボールは C→D へ乗り換えて D（ゴール）に到達できる。
-  // -----------------------------------------------------------------------
+export type PuzzleLevel = Readonly<{
+  name: string;
+  hint: string;
+  spec: WorldSpec;
+}>;
+
+export const puzzleLevels: ReadonlyArray<PuzzleLevel> = [
   {
     name: "Perspective Drop",
     hint: "B と C が画面上で重なる視点を探そう",
@@ -22,7 +22,7 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
       nodes: [
         { id: "A", position: v3(-6, 4, 0) },
         { id: "B", position: v3(-1, 1, 0) },
-        { id: "C", position: v3(-1, 1, 6) }, // Z 方向にずれた "double" of B
+        { id: "C", position: v3(-1, 1, 6) },
         { id: "D", position: v3(5, -3, 6) },
       ],
       rails: [
@@ -36,9 +36,6 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
     },
   },
 
-  // -----------------------------------------------------------------------
-  // STAGE 2: 三段ジャンプ。重なりを 2 回作る必要がある。
-  // -----------------------------------------------------------------------
   {
     name: "Triple Step",
     hint: "視点を保つと 3 本のレールが 1 本の階段に見える",
@@ -61,11 +58,6 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
     },
   },
 
-  // -----------------------------------------------------------------------
-  // STAGE 3: フェイクの分岐。
-  // 本物の分岐先（同ノードに接続するレール）と、視点接続の選択肢を出す。
-  // 視点を切り替えると到達不可能な分岐に進むことになる。
-  // -----------------------------------------------------------------------
   {
     name: "False Branch",
     hint: "Y 字の同ノード分岐と視点リンク、どちらが正解？",
@@ -87,11 +79,6 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
     },
   },
 
-  // -----------------------------------------------------------------------
-  // STAGE 4: 真横から（yaw≈-π/2 / +π/2）。
-  // 接続候補が X 軸方向にずれているので、真正面では決して重ならない。
-  // 横（90°）から覗いたときだけ B と C が画面で重なる。
-  // -----------------------------------------------------------------------
   {
     name: "Side Step",
     hint: "真横から覗くと 2 本が同じ縦線に揃う",
@@ -99,7 +86,7 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
       nodes: [
         { id: "A", position: v3(0, 5, 0) },
         { id: "B", position: v3(0, 1, 0) },
-        { id: "C", position: v3(5, 1, 0) }, // X 方向に +5 ずれた "double"
+        { id: "C", position: v3(5, 1, 0) },
         { id: "D", position: v3(5, -3, 0) },
       ],
       rails: [
@@ -111,11 +98,6 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
     },
   },
 
-  // -----------------------------------------------------------------------
-  // STAGE 5: 斜め視点（yaw=π/4 付近）。
-  // 接続候補が X と Z に均等に離れている。視点を 45° まわすと B≈C。
-  // 「正面」「真横」のどちらでもうまくいかない、中間角度が正解。
-  // -----------------------------------------------------------------------
   {
     name: "Diagonal",
     hint: "斜め 45° に視点を回すと 2 本が揃う",
@@ -123,7 +105,7 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
       nodes: [
         { id: "A", position: v3(0, 5, 0) },
         { id: "B", position: v3(0, 1, 0) },
-        { id: "C", position: v3(5, 1, 5) }, // (B-C) = (-5, 0, -5)
+        { id: "C", position: v3(5, 1, 5) },
         { id: "D", position: v3(5, -3, 5) },
       ],
       rails: [
@@ -135,10 +117,6 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
     },
   },
 
-  // -----------------------------------------------------------------------
-  // STAGE 6: 螺旋階段。Z オフセットを正負交互に繰り返した 4 段。
-  // ボールが回転して見えるが、現視点では一本の長い斜線に揃う。
-  // -----------------------------------------------------------------------
   {
     name: "Spiral Steps",
     hint: "正面視点で 4 本のレールが 1 本の階段になる",
@@ -164,12 +142,6 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
     },
   },
 
-  // -----------------------------------------------------------------------
-  // STAGE 7: 上から覗く（pitch ≈ -π/2 寄り）。
-  // 接続候補が Y 軸方向にずれている。上から見ると Y が消えて重なる。
-  // ただし完全な top view では水平レールに重力がほぼ乗らないので、
-  // 「やや傾けた top view」を見つけるバランス感が要る。
-  // -----------------------------------------------------------------------
   {
     name: "Bird's View",
     hint: "上から覗き込むと 2 本が重なる",
@@ -177,7 +149,7 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
       nodes: [
         { id: "A", position: v3(-5, 2, 0) },
         { id: "B", position: v3(0, -1, 0) },
-        { id: "C", position: v3(0, 4, 0) }, // (B-C) = (0, -5, 0)
+        { id: "C", position: v3(0, 4, 0) },
         { id: "D", position: v3(5, 1, 0) },
       ],
       rails: [
@@ -189,10 +161,6 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
     },
   },
 
-  // -----------------------------------------------------------------------
-  // STAGE 8: 多分岐。3 本の独立した平行スロープが Z オフセットで並ぶ。
-  // 視点で繋がる「正しい連結」を毎ステップ選び続ける必要がある。
-  // -----------------------------------------------------------------------
   {
     name: "Many Tracks",
     hint: "正面視点を保ったまま 3 本のレールを順に渡る",
@@ -204,7 +172,6 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
         { id: "D", position: v3(1, 0, 6) },
         { id: "E", position: v3(1, 0, 3) },
         { id: "F", position: v3(6, -4, 3) },
-        // 罠: 同視点で重なる別ルート（行き止まり）
         { id: "X", position: v3(-3, 3, -5) },
         { id: "Y", position: v3(2, 2, -5) },
       ],
@@ -212,7 +179,7 @@ export const levels: ReadonlyArray<{ name: string; spec: WorldSpec; hint: string
         { id: "r1", from: "A", to: "B" },
         { id: "r2", from: "C", to: "D" },
         { id: "r3", from: "E", to: "F" },
-        { id: "rX", from: "X", to: "Y" }, // 視点上で B/C と重なる罠
+        { id: "rX", from: "X", to: "Y" },
       ],
       startRailId: "r1",
       goalNodeId: "F",
