@@ -22,3 +22,23 @@ export const lerp3 = (a: Vec3, b: Vec3, t: number): Vec3 =>
 export const sub2 = (a: Vec2, b: Vec2): Vec2 => v2(a.x - b.x, a.y - b.y);
 export const length2 = (a: Vec2): number => Math.sqrt(a.x * a.x + a.y * a.y);
 export const dist2 = (a: Vec2, b: Vec2): number => length2(sub2(a, b));
+export const dot2 = (a: Vec2, b: Vec2): number => a.x * b.x + a.y * b.y;
+export const cross2 = (a: Vec2, b: Vec2): number => a.x * b.y - a.y * b.x;
+
+// 点 p と線分 a-b の最短距離と、最近点のパラメータ t (0..1)。
+// セグメントが退化（a==b）なら p との距離と t=0 を返す。
+export const pointSegmentDistance2D = (
+  p: Vec2,
+  a: Vec2,
+  b: Vec2,
+): { dist: number; t: number } => {
+  const ab = sub2(b, a);
+  const len2 = ab.x * ab.x + ab.y * ab.y;
+  if (len2 < 1e-12) return { dist: dist2(p, a), t: 0 };
+  const ap = sub2(p, a);
+  let t = (ap.x * ab.x + ap.y * ab.y) / len2;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  const closest = v2(a.x + t * ab.x, a.y + t * ab.y);
+  return { dist: dist2(p, closest), t };
+};

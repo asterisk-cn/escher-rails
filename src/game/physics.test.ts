@@ -55,7 +55,8 @@ describe("physics", () => {
       const r = stepBall(flat, ball, { yaw: 0, pitch: 0 }, 1 / 60, { friction: 0 });
       ball = r.ball;
     }
-    expect(ball.speed).toBeCloseTo(0);
+    // 摩擦・重力なし → 初速 0 のまま
+    expect(ball.speed).toBe(0);
     expect(ball.t).toBe(0);
   });
 
@@ -96,7 +97,7 @@ describe("physics", () => {
       const r = stepBall(w, ball, { yaw: 0, pitch: 0 }, 1 / 60);
       ball = r.ball;
       for (const ev of r.events) {
-        if (ev.kind === "transition" && ev.via.kind === "perspective") transitioned = true;
+        if (ev.kind === "midrail") transitioned = true;
         if (ev.kind === "goal") goalHit = true;
       }
       if (ball.railId === "r2") landedOnR2 = true;
@@ -106,7 +107,44 @@ describe("physics", () => {
     expect(goalHit).toBe(true);
   });
 
-  it("行き止まりで deadend イベントが発火し速度 0", () => {
+  it("重力は視点に追随する: 横レールでも視点を傾けるとボールが動く", () => {
+    // X 方向の水平レール
+    const flat = buildWorld({
+      nodes: [
+        { id: "A", position: v3(-5, 0, 0) },
+        { id: "B", position: v3(5, 0, 0) },
+      ],
+      rails: [{ id: "r1", from: "A", to: "B" }],
+      startRailId: "r1",
+      startT: 0.5,
+      goalNodeId: "B",
+    });
+
+    // (1) yaw=0, pitch=0 視点: 重力 (0,-up,0) はレールに垂直 → 加速 0
+    {
+      let ball = makeInitialBall(flat);
+      for (let i = 0; i < 30; i++) {
+        const r = stepBall(flat, ball, { yaw: 0, pitch: 0 }, 1 / 60);
+        ball = r.ball;
+      }
+      expect(Math.abs(ball.t - 0.5)).toBeLessThan(1e-6); // 動かない
+      expect(ball.speed).toBeCloseTo(0);
+    }
+
+    // (2) yaw=π/2, pitch=π/4 視点: up が X 軸成分を持ち、effective gravity が
+    //     -X 方向に成分を持つ → 横レール沿いに加速
+    {
+      let ball = makeInitialBall(flat);
+      for (let i = 0; i < 30; i++) {
+        const r = stepBall(flat, ball, { yaw: Math.PI / 2, pitch: Math.PI / 4 }, 1 / 60);
+        ball = r.ball;
+      }
+      expect(Math.abs(ball.t - 0.5)).toBeGreaterThan(0.01); // 動いた
+      expect(ball.speed).toBeGreaterThan(0);
+    }
+  });
+
+  it("行き止まりではゴール以外なら止まらず跳ね返る", () => {
     const dead = buildWorld({
       nodes: [
         { id: "A", position: v3(0, 10, 0) },
@@ -118,13 +156,26 @@ describe("physics", () => {
       goalNodeId: "G",
     });
     let ball = makeInitialBall(dead);
-    let deadHit = false;
-    for (let i = 0; i < 600 && !deadHit; i++) {
+    let bounceHit = false;
+    let dirReversedAfterBounce = false;
+    let bouncedDir: 1 | -1 | null = null;
+    for (let i = 0; i < 600; i++) {
       const r = stepBall(dead, ball, { yaw: 0, pitch: 0 }, 1 / 60);
       ball = r.ball;
-      for (const ev of r.events) if (ev.kind === "deadend") deadHit = true;
+      for (const ev of r.events) {
+        if (ev.kind === "bounce") {
+          bounceHit = true;
+          bouncedDir = ball.dir;
+        }
+      }
+      if (bouncedDir !== null && ball.dir !== bouncedDir) {
+        // 跳ね返り後、重力で再加速→反対端でまた跳ね返るところまで動いている
+        dirReversedAfterBounce = true;
+        break;
+      }
     }
-    expect(deadHit).toBe(true);
-    expect(ball.speed).toBe(0);
+    expect(bounceHit).toBe(true);
+    expect(ball.speed).toBeGreaterThan(0); // 止まっていない
+    expect(dirReversedAfterBounce).toBe(true);
   });
 });

@@ -14,15 +14,16 @@ import { ballPosition, type BallState } from "../game/physics.js";
 const PAPER = 0xf0ead6;
 const INK = 0x1a1d24;
 const RAIL_COLOR = 0x2b3140;
-const NODE_COLOR = 0x4a4a4a;
 const BALL_COLOR = 0xc25a4a;
 const GOAL_COLOR = 0xf6c177;
 const GOAL_RING = 0xc28a30;
-const OVERLAP_COLOR = 0xf6c177;
-const HIGHLIGHT_COLOR = 0xc25a4a;
+const BOX_LINE = 0x2b3140;
+const GRID_MAIN = 0x9e9886;
+const GRID_SUB = 0xc8c2ad;
 
 const CAMERA_DISTANCE = 40;
 const ORTHO_VIEW_SIZE = 14;
+const BOUND_MARGIN = 2;
 
 export type SceneRefs = Readonly<{
   scene: THREE.Scene;
@@ -30,10 +31,7 @@ export type SceneRefs = Readonly<{
   renderer: THREE.WebGLRenderer;
   worldGroup: THREE.Group;
   ballMesh: THREE.Mesh;
-  nodeMeshes: Map<string, THREE.Mesh>;
   goalMesh: THREE.Mesh;
-  overlapRing: THREE.Mesh;
-  overlapRing2: THREE.Mesh;
   resize: () => void;
 }>;
 
@@ -41,13 +39,11 @@ export const createScene = (canvas: HTMLCanvasElement): SceneRefs => {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(PAPER);
 
-  // 環境光 + 1 灯のディレクショナル。陰影は控えめに、紙のような印象に。
   scene.add(new THREE.AmbientLight(0xffffff, 0.85));
   const dir = new THREE.DirectionalLight(0xffffff, 0.55);
   dir.position.set(6, 12, 8);
   scene.add(dir);
 
-  // orthographic camera。aspect は resize で調整。
   const camera = new THREE.OrthographicCamera(
     -ORTHO_VIEW_SIZE, ORTHO_VIEW_SIZE,
     ORTHO_VIEW_SIZE, -ORTHO_VIEW_SIZE,
@@ -70,7 +66,7 @@ export const createScene = (canvas: HTMLCanvasElement): SceneRefs => {
   const ballMesh = new THREE.Mesh(ballGeom, ballMat);
   scene.add(ballMesh);
 
-  // ゴールマーカ（後で配置）
+  // ゴール（あとで位置調整）
   const goalGeom = new THREE.SphereGeometry(0.7, 24, 18);
   const goalMat = new THREE.MeshStandardMaterial({
     color: GOAL_COLOR,
@@ -80,20 +76,6 @@ export const createScene = (canvas: HTMLCanvasElement): SceneRefs => {
   });
   const goalMesh = new THREE.Mesh(goalGeom, goalMat);
   scene.add(goalMesh);
-
-  // 視点重なりインジケータ（リング 2 つ）
-  const ringGeom = new THREE.RingGeometry(0.7, 0.85, 32);
-  const ringMat1 = new THREE.MeshBasicMaterial({
-    color: OVERLAP_COLOR, side: THREE.DoubleSide, transparent: true, opacity: 0,
-  });
-  const ringMat2 = new THREE.MeshBasicMaterial({
-    color: HIGHLIGHT_COLOR, side: THREE.DoubleSide, transparent: true, opacity: 0,
-  });
-  const overlapRing = new THREE.Mesh(ringGeom, ringMat1);
-  const overlapRing2 = new THREE.Mesh(ringGeom, ringMat2);
-  scene.add(overlapRing, overlapRing2);
-
-  const nodeMeshes = new Map<string, THREE.Mesh>();
 
   const resize = () => {
     const rect = canvas.getBoundingClientRect();
@@ -108,39 +90,68 @@ export const createScene = (canvas: HTMLCanvasElement): SceneRefs => {
     camera.updateProjectionMatrix();
   };
 
-  return { scene, camera, renderer, worldGroup, ballMesh, nodeMeshes, goalMesh, overlapRing, overlapRing2, resize };
+  return { scene, camera, renderer, worldGroup, ballMesh, goalMesh, resize };
 };
 
 // World をシーンに反映（再構築）。
 export const populateWorld = (refs: SceneRefs, world: World): void => {
-  // 既存の世界オブジェクトをクリア
   while (refs.worldGroup.children.length > 0) {
     const c = refs.worldGroup.children[0]!;
     refs.worldGroup.remove(c);
     disposeObject(c);
   }
-  refs.nodeMeshes.clear();
 
-  // ノードを「球 + 黒い縁」で描く
-  for (const node of world.nodes.values()) {
-    const isGoal = node.id === world.goalNodeId;
-    const radius = isGoal ? 0 : 0.28;
-    if (radius > 0) {
-      const g = new THREE.SphereGeometry(radius, 16, 12);
-      const m = new THREE.MeshStandardMaterial({ color: NODE_COLOR, roughness: 0.6 });
-      const mesh = new THREE.Mesh(g, m);
-      mesh.position.set(node.position.x, node.position.y, node.position.z);
-      refs.worldGroup.add(mesh);
-      refs.nodeMeshes.set(node.id, mesh);
-    }
+  // バウンディングボックスを算出
+  let xmin = Infinity, ymin = Infinity, zmin = Infinity;
+  let xmax = -Infinity, ymax = -Infinity, zmax = -Infinity;
+  for (const n of world.nodes.values()) {
+    if (n.position.x < xmin) xmin = n.position.x;
+    if (n.position.y < ymin) ymin = n.position.y;
+    if (n.position.z < zmin) zmin = n.position.z;
+    if (n.position.x > xmax) xmax = n.position.x;
+    if (n.position.y > ymax) ymax = n.position.y;
+    if (n.position.z > zmax) zmax = n.position.z;
   }
+  xmin -= BOUND_MARGIN; ymin -= BOUND_MARGIN; zmin -= BOUND_MARGIN;
+  xmax += BOUND_MARGIN; ymax += BOUND_MARGIN; zmax += BOUND_MARGIN;
+  const sx = xmax - xmin, sy = ymax - ymin, sz = zmax - zmin;
+  const cx = (xmin + xmax) / 2, cy = (ymin + ymax) / 2, cz = (zmin + zmax) / 2;
+
+  // ワイヤーフレーム境界箱
+  {
+    const boxGeom = new THREE.BoxGeometry(sx, sy, sz);
+    const edges = new THREE.EdgesGeometry(boxGeom);
+    const lineMat = new THREE.LineBasicMaterial({ color: BOX_LINE, transparent: true, opacity: 0.55 });
+    const lines = new THREE.LineSegments(edges, lineMat);
+    lines.position.set(cx, cy, cz);
+    refs.worldGroup.add(lines);
+    boxGeom.dispose(); // edges は別 geometry を保持
+  }
+
+  // 床グリッド（バウンディング箱の底面に配置）
+  {
+    const size = Math.max(sx, sz);
+    const div = Math.max(2, Math.round(size));
+    const grid = new THREE.GridHelper(size, div, GRID_MAIN, GRID_SUB);
+    grid.position.set(cx, ymin, cz);
+    refs.worldGroup.add(grid);
+  }
+
+  // 軸ヘルパー（バウンディング箱の前下隅）
+  {
+    const axes = new THREE.AxesHelper(2);
+    axes.position.set(xmin, ymin, zmax);
+    refs.worldGroup.add(axes);
+  }
+
+  // 端点（ゴール以外）の球は描かない。レールの線が見えていれば十分。
   refs.goalMesh.position.set(
     world.nodes.get(world.goalNodeId)!.position.x,
     world.nodes.get(world.goalNodeId)!.position.y,
     world.nodes.get(world.goalNodeId)!.position.z,
   );
 
-  // レール（cylinder で太めに描き、両端は球で丸める）
+  // レール（cylinder + edge outline）
   for (const rail of world.rails.values()) {
     const a = world.nodes.get(rail.from)!.position;
     const b = world.nodes.get(rail.to)!.position;
@@ -152,18 +163,14 @@ export const populateWorld = (refs: SceneRefs, world: World): void => {
     const railGeom = new THREE.CylinderGeometry(0.16, 0.16, length, 16, 1);
     const railMat = new THREE.MeshStandardMaterial({ color: RAIL_COLOR, roughness: 0.4, metalness: 0.5 });
     const railMesh = new THREE.Mesh(railGeom, railMat);
-
-    // 中点に移動
     railMesh.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
-    // cylinder のデフォルト軸は +Y。 (ax,ay,az)→(bx,by,bz) の方向に向ける。
+
     const dirVec = new THREE.Vector3(dx, dy, dz).normalize();
     const up = new THREE.Vector3(0, 1, 0);
     const quat = new THREE.Quaternion().setFromUnitVectors(up, dirVec);
     railMesh.quaternion.copy(quat);
-
     refs.worldGroup.add(railMesh);
 
-    // エッジ線（インクアウトライン）
     const edges = new THREE.EdgesGeometry(railGeom, 25);
     const edgeMat = new THREE.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.4 });
     const edgeLines = new THREE.LineSegments(edges, edgeMat);
@@ -184,7 +191,6 @@ const disposeObject = (obj: THREE.Object3D): void => {
 };
 
 // カメラを view に合わせて配置（orthographic）。
-// projection.basisOf と一致させる: forward 方向の逆側にカメラを置く。
 export const applyView = (refs: SceneRefs, view: View): void => {
   const b = basisOf(view);
   const cx = -b.forward.x * CAMERA_DISTANCE;
@@ -195,47 +201,7 @@ export const applyView = (refs: SceneRefs, view: View): void => {
   refs.camera.lookAt(0, 0, 0);
 };
 
-// ボールを現在のレール上の位置に置く。
 export const placeBall = (refs: SceneRefs, world: World, ball: BallState): void => {
   const p = ballPosition(world, ball);
   refs.ballMesh.position.set(p.x, p.y, p.z);
-};
-
-// 視点重なりリングを更新。重なりノードがあれば両方にリングを表示する。
-export const updateOverlapRings = (
-  refs: SceneRefs,
-  world: World,
-  targetNodeId: string | null,
-  overlappingNodeId: string | null,
-  view: View,
-): void => {
-  const ringMat1 = refs.overlapRing.material as THREE.MeshBasicMaterial;
-  const ringMat2 = refs.overlapRing2.material as THREE.MeshBasicMaterial;
-  if (!targetNodeId || !overlappingNodeId) {
-    ringMat1.opacity = Math.max(0, ringMat1.opacity - 0.05);
-    ringMat2.opacity = Math.max(0, ringMat2.opacity - 0.05);
-    return;
-  }
-  const a = world.nodes.get(targetNodeId);
-  const c = world.nodes.get(overlappingNodeId);
-  if (!a || !c) return;
-  refs.overlapRing.position.set(a.position.x, a.position.y, a.position.z);
-  refs.overlapRing2.position.set(c.position.x, c.position.y, c.position.z);
-
-  // リングはカメラに正対させる
-  const b = basisOf(view);
-  const lookAt = (m: THREE.Mesh) => {
-    const target = new THREE.Vector3(
-      m.position.x - b.forward.x,
-      m.position.y - b.forward.y,
-      m.position.z - b.forward.z,
-    );
-    m.up.set(b.up.x, b.up.y, b.up.z);
-    m.lookAt(target);
-  };
-  lookAt(refs.overlapRing);
-  lookAt(refs.overlapRing2);
-
-  ringMat1.opacity = Math.min(0.9, ringMat1.opacity + 0.1);
-  ringMat2.opacity = Math.min(0.9, ringMat2.opacity + 0.1);
 };

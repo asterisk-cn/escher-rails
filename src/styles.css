@@ -1,11 +1,9 @@
 :root {
-  color-scheme: dark;
-  --bg: #0b0d12;
-  --ink: #e8e6df;
-  --accent: #f6c177;
-  --dim: #6e6a60;
+  color-scheme: light;
   --paper: #f0ead6;
-  --line: #1a1d24;
+  --ink: #1a1d24;          /* クリーム背景上で読める濃色テキスト */
+  --accent: #b04a2e;       /* 紙色に対しコントラストが出る深い赤茶 */
+  --dim: #6e6a60;
   font-family: "Iosevka", "JetBrains Mono", "SF Mono", ui-monospace, monospace;
 }
 
@@ -21,7 +19,7 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--paper);
   color: var(--ink);
 }
 
@@ -38,42 +36,42 @@ body,
   position: absolute;
   inset: 0;
   pointer-events: none;
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.02em;
 }
 
 #hud-title {
-  font-size: 14px;
+  position: absolute;
+  top: 20px;
+  left: 24px;
+  font-size: 22px;
+  font-weight: bold;
   letter-spacing: 0.32em;
   color: var(--accent);
 }
 
 #hud-stage {
+  position: absolute;
+  top: 56px;
+  left: 24px;
+  font-size: 20px;
+  font-weight: bold;
+  letter-spacing: 0.16em;
   color: var(--ink);
-  opacity: 0.8;
 }
 
 #hud-status {
-  margin-top: 6px;
-  min-height: 1.4em;
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80vw;
+  text-align: center;
+  font-size: 28px;
   font-weight: bold;
+  line-height: 1.4;
   color: var(--accent);
-}
-
-#hud-help {
-  margin-top: auto;
-  align-self: flex-start;
-  color: var(--dim);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: none;
-  line-height: 1.6;
+  white-space: pre-line;
+  min-height: 1.4em;
 }
 
 #hud-debug {
@@ -82,9 +80,20 @@ body,
   right: 16px;
   color: var(--dim);
   font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: none;
   text-align: right;
   white-space: pre;
   line-height: 1.4;
+}
+
+#navcube {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 160px;
+  height: 160px;
+  pointer-events: none;
+  background: transparent;
+  /* 向き表示のみ。枠も控えめに。 */
+  border: 1px solid rgba(110, 106, 96, 0.3);
+  border-radius: 4px;
 }
